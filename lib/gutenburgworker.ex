@@ -1,35 +1,41 @@
 defmodule GutenburgWorker do
-  alias Poison, as: JSON
 
   def get_books(trigram_url, starting_number, batch_size) do
-    Enum.each(0..batch_size, fn offset ->
-      do_get_books(trigram_url, starting_number + offset)
+    tasks = Enum.map(0..batch_size, &Task.async(fn ->
+      do_get_books(trigram_url, starting_number + &1)
+    end))
+
+    IO.inspect tasks
+    res = Enum.map(tasks, fn task ->
+      Task.await(task, 10_000)
     end)
+    IO.inspect res
+    length(res)
   end
 
   def do_get_books(trygram_url, number) do
     url = "http://www.gutenberg.org/cache/epub/#{number}/pg#{number}.txt"
     trygram_url = trygram_url <> "/api/trygram/createtrygrams"
 
-    {:ok, body} = get_body(url)
-    titlePattern = ~r"Title: (?<title>[\S ]+)"
-    %{"title" => title} = Regex.named_captures(titlePattern, body)
+    case get_body(url) do
+      {:ok, body} ->
+        titlePattern = ~r"Title: (?<title>[\S ]+)"
+        %{"title" => title} = Regex.named_captures(titlePattern, body)
 
-    book_parts = body
-    |> String.codepoints()
-    |> Stream.chunk_every(10_000)
-    |> Stream.map(&Enum.join/1)
+        book_parts = body
+        |> String.codepoints()
+        |> Stream.chunk_every(10_000)
+        |> Stream.map(&Enum.join/1)
 
-    res = Stream.each(book_parts, &spawn(fn ->
-      send_request(&1, trygram_url, title)
-    end))
+        res = Stream.each(book_parts, &spawn(fn ->
+          send_request(&1, trygram_url, title)
+        end))
 
-    Enum.to_list(res)
+        Enum.to_list(res)
+        :ok
 
-
-    # Enum.each(book_parts, &fn &1 ->
-    #   spawn(send_request(trygram_url, title, &1))
-    # end)
+      any -> any
+    end
   end
   # GutenburgWorker.do_get_books("http://144.17.24.80:30081", 2072)
 
@@ -42,12 +48,16 @@ defmodule GutenburgWorker do
     case HTTPoison.post(url, request_body, [{"Content-Type", "application/json"}], recv_timeout: 20000) do
       {:ok, %HTTPoison.Response{status_code: 404}} ->
         IO.puts "could not find #{url}"
+        :not_success
       {:ok, %HTTPoison.Response{status_code: 500}} ->
         IO.puts "you broke the server"
+        :not_success
       {:ok, %HTTPoison.Response{status_code: 200}} ->
         IO.puts "sucess"
+        :success
       {:error, %HTTPoison.Error{reason: reason}} ->
         IO.inspect(reason)
+        :not_success
     end
   end
 

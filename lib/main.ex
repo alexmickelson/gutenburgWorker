@@ -11,7 +11,13 @@ defmodule Commandline.CLI do
     starting_number = Keyword.get(options, :start, 2701)
     batch_size = Keyword.get(options, :batch, 1)
 
+    IO.puts "URL: "
+    IO.puts url
+    IO.puts "STARTING NUMBER: "
+    IO.inspect starting_number
+    IO.puts "BATCH SIZE: "
+    IO.inspect batch_size
 
+    GutenburgWorker.get_books(url, starting_number, batch_size)
   end
-
 end
