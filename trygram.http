@@ -1,0 +1,7 @@
+POST http://144.17.24.80:30081/api/trygram/createtrygrams
+Content-Type: application/json
+
+{
+    "text": "alex has some words to say",
+    "title": "alex was here"
+}
